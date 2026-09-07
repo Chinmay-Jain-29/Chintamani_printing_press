@@ -1,0 +1,47 @@
+<svg width="800" height="500" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="800" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#f8fafc"/>
+      <stop offset="1" stopColor="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="bannerBg" x1="0" y1="0" x2="680" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#b91c1c"/>
+      <stop offset="0.5" stopColor="#c2410c"/>
+      <stop offset="1" stopColor="#b45309"/>
+    </linearGradient>
+    <filter id="bannerShadow" x="40" y="80" width="720" height="340" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="500" fill="url(#sky)"/>
+
+  <!-- Metal Truss / Frame -->
+  <rect x="50" y="70" width="700" height="10" fill="#64748b"/>
+  <rect x="50" y="410" width="700" height="10" fill="#64748b"/>
+  <rect x="50" y="70" width="10" height="350" fill="#64748b"/>
+  <rect x="740" y="70" width="10" height="350" fill="#64748b"/>
+
+  <!-- High-Gloss Flex Banner Mockup -->
+  <g filter="url(#bannerShadow)">
+    <rect x="65" y="85" width="670" height="320" rx="8" fill="url(#bannerBg)"/>
+
+    <!-- Eyelets -->
+    <circle cx="80" cy="100" r="4" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+    <circle cx="720" cy="100" r="4" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+    <circle cx="80" cy="390" r="4" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+    <circle cx="720" cy="390" r="4" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+
+    <!-- Banner Content -->
+    <rect x="180" y="105" width="440" height="36" rx="18" fill="rgba(255,255,255,0.2)"/>
+    <text x="400" y="129" font-family="'Noto Sans Devanagari', sans-serif" font-size="16" font-weight="700" fill="#fef08a" text-anchor="middle">॥ श्री गणेशाय नमः ॥</text>
+
+    <text x="400" y="200" font-family="'Noto Sans Devanagari', sans-serif" font-size="42" font-weight="900" fill="#ffffff" text-anchor="middle">भव्य उत्सव व स्नेहसंमेलन</text>
+    <text x="400" y="250" font-family="'Noto Sans Devanagari', sans-serif" font-size="20" font-weight="700" fill="#fed7aa" text-anchor="middle">सर्व नागरिकांचे हार्दिक स्वागत</text>
+
+    <line x1="140" y1="280" x2="660" y2="280" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="6 6"/>
+
+    <text x="400" y="325" font-family="'Plus Jakarta Sans', sans-serif" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Flex Printed by: NEW CHINTAMANI PRINTING PRESS, DONGAON</text>
+    <text x="400" y="355" font-family="'Plus Jakarta Sans', sans-serif" font-size="14" fill="#fde047" text-anchor="middle">📞 9421396905 / 9834853851 • Since 1999</text>
+  </g>
+</svg>

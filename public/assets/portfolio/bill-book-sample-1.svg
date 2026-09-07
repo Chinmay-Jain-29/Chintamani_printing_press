@@ -1,0 +1,47 @@
+<svg width="800" height="500" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="bookShadow" x="160" y="40" width="480" height="420" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="8" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="500" fill="#f5f0e6"/>
+
+  <g filter="url(#bookShadow)">
+    <!-- Book Cover / Base Sheet -->
+    <rect x="200" y="50" width="400" height="380" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+
+    <!-- Binding Tape on Top -->
+    <rect x="200" y="50" width="400" height="32" fill="#c25e2e"/>
+    <line x1="200" y1="82" x2="600" y2="82" stroke="#9a3412" stroke-width="2"/>
+
+    <!-- Perforation line -->
+    <line x1="200" y1="95" x2="600" y2="95" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+    <!-- Bill Header -->
+    <text x="400" y="135" font-family="'Plus Jakarta Sans', sans-serif" font-size="18" font-weight="900" fill="#0f172a" text-anchor="middle">TAX INVOICE / CASH MEMO</text>
+    <text x="400" y="155" font-family="'Noto Sans Devanagari', sans-serif" font-size="14" font-weight="700" fill="#c25e2e" text-anchor="middle">न्यू चिंतामणी ट्रेडर्स व सप्लायर्स</text>
+
+    <!-- Details Box -->
+    <rect x="220" y="175" width="360" height="40" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text x="230" y="195" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" fill="#475569">Bill No: CP-0842</text>
+    <text x="480" y="195" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" fill="#475569">Date: 12/08/2026</text>
+    <text x="230" y="210" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" fill="#475569">M/s: ____________________________________</text>
+
+    <!-- Table Grid -->
+    <rect x="220" y="225" width="360" height="140" fill="#ffffff" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="260" y1="225" x2="260" y2="365" stroke="#0f172a"/>
+    <line x1="450" y1="225" x2="450" y2="365" stroke="#0f172a"/>
+    <line x1="510" y1="225" x2="510" y2="365" stroke="#0f172a"/>
+    <line x1="220" y1="250" x2="580" y2="250" stroke="#0f172a" stroke-width="1.5"/>
+
+    <text x="240" y="242" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" text-anchor="middle">Sr.</text>
+    <text x="350" y="242" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" text-anchor="middle">Particulars</text>
+    <text x="480" y="242" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" text-anchor="middle">Qty</text>
+    <text x="545" y="242" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" text-anchor="middle">Rate</text>
+
+    <!-- Stamp & Signature -->
+    <text x="230" y="405" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" fill="#64748b">Printed by: New Chintamani Press, Dongaon</text>
+    <text x="500" y="405" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="700" fill="#0f172a">Authorized Sign</text>
+  </g>
+</svg>

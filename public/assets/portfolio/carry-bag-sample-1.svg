@@ -1,0 +1,33 @@
+<svg width="800" height="500" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bagGrad" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#0284c7"/>
+      <stop offset="1" stopColor="#0369a1"/>
+    </linearGradient>
+    <filter id="bagShadow" x="180" y="50" width="440" height="420" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="6" dy="16" stdDeviation="22" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="500" fill="#fdfbf7"/>
+
+  <g filter="url(#bagShadow)">
+    <!-- Bag Body -->
+    <path d="M240 120H560L540 430H260L240 120Z" fill="url(#bagGrad)"/>
+
+    <!-- D-cut Handle -->
+    <rect x="360" y="150" width="80" height="28" rx="14" fill="#ffffff"/>
+
+    <!-- Screen Printed Shop Branding -->
+    <circle cx="400" cy="240" r="36" fill="none" stroke="#ffffff" stroke-width="2"/>
+    <text x="400" y="247" font-family="'Plus Jakarta Sans', sans-serif" font-size="24" font-weight="900" fill="#ffffff" text-anchor="middle">SJ</text>
+
+    <text x="400" y="295" font-family="'Noto Sans Devanagari', sans-serif" font-size="19" font-weight="800" fill="#ffffff" text-anchor="middle">श्री ज्वेलर्स व वस्त्रदालन</text>
+    <text x="400" y="320" font-family="'Noto Sans Devanagari', sans-serif" font-size="13" font-weight="600" fill="#e0f2fe" text-anchor="middle">मेन रोड, डोणगाव (जि. बुलढाणा)</text>
+
+    <line x1="280" y1="345" x2="520" y2="345" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+
+    <text x="400" y="375" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">Bag Printed by: New Chintamani Printing Press • 9421396905</text>
+    <text x="400" y="395" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" fill="#bae6fd" text-anchor="middle">Eco-Friendly Non-Woven Fabric</text>
+  </g>
+</svg>
