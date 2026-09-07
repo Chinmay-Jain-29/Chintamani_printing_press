@@ -181,19 +181,40 @@ Chintamani_printing_press/
    ```bash
    cp .env.example .env.local
    ```
-   Generate a 32+ character random secret for `ADMIN_SESSION_SECRET`.
+   Configure your `ADMIN_SESSION_SECRET` (32+ character random string) and your Supabase PostgreSQL credentials (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
 
-4. **Run the development server:**
+4. **Apply Supabase Database Migrations & Seed Data:**
+   - Execute `supabase/migrations/001_initial_schema.sql` in your Supabase SQL Editor.
+   - Run the automated migration script to sync existing catalog items and quotes:
+   ```bash
+   node scripts/migrate-to-supabase.mjs
+   ```
+   See [`docs/supabase-setup.md`](docs/supabase-setup.md) for full step-by-step instructions.
+
+5. **Run the development server:**
    ```bash
    npm run dev
    ```
    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-5. **Build for production:**
+6. **Build for production:**
    ```bash
    npm run build
    npm run start
    ```
+
+---
+
+## 🗄️ Database Architecture (Supabase PostgreSQL)
+
+Data persistence is powered by **Supabase PostgreSQL** with Row Level Security (RLS):
+- **Quotes Inbox (`quotes`):** Customer inquiries persist permanently across Vercel deployments, cold starts, and function instances.
+- **Service Catalog (`services`):** Dynamic trilingual printing services with sort order, featured flags, and custom icons.
+- **Portfolio Showcase (`portfolio`):** Filterable recent works with high-res photography and specifications.
+- **Customer Reviews (`reviews`):** Public reviews with strict server-side administrative moderation.
+- **Site Settings (`site_settings`):** Business contact details, branding logos, homepage hero configuration, and SEO metadata.
+- **Multilingual Content (`translations`):** Trilingual UI dictionaries (English, Marathi, Hindi).
+- **Storage Bucket (`chintamani_uploads`):** Cloud-hosted images for uploaded print samples and banners.
 
 ---
 

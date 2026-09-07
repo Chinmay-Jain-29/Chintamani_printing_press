@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
-import { getDatabase } from './db';
+import { getDatabase, fetchAdminUserAsync } from './db';
 import { checkRateLimit as checkGlobalRateLimit, resetRateLimit as resetGlobalRateLimit } from './rateLimit';
 
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || 'chintamani-printing-press-secret-key-1999-secure';
@@ -61,8 +61,8 @@ export async function getAdminSession(): Promise<SessionPayload | null> {
     if (!payload) return null;
 
     // Check token version against database to enforce instant session revocation on password changes
-    const db = getDatabase();
-    const currentVersion = db.admin.tokenVersion || 1;
+    const admin = await fetchAdminUserAsync();
+    const currentVersion = admin.tokenVersion || 1;
     if (payload.tokenVersion && payload.tokenVersion < currentVersion) {
       return null;
     }
@@ -74,8 +74,8 @@ export async function getAdminSession(): Promise<SessionPayload | null> {
 }
 
 export async function setAdminSession(userId: string, email: string): Promise<string> {
-  const db = getDatabase();
-  const tokenVersion = db.admin.tokenVersion || 1;
+  const admin = await fetchAdminUserAsync();
+  const tokenVersion = admin.tokenVersion || 1;
   const exp = Math.floor(Date.now() / 1000) + SESSION_DURATION_HOURS * 3600;
   const token = createToken({ userId, email, tokenVersion, exp });
   const cookieStore = await cookies();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase, syncDatabaseFromCloud } from '@/lib/db';
+import { fetchQuotesAsync, insertQuoteAsync, updateQuoteAsync, deleteQuoteAsync, syncDatabaseFromCloud } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { QuoteRequest } from '@/lib/schema';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
@@ -16,12 +16,11 @@ export async function GET(req: NextRequest) {
 
   try {
     await syncDatabaseFromCloud();
-    const db = getDatabase();
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get('status');
     const search = searchParams.get('search')?.toLowerCase().trim();
 
-    let quotes = [...db.quotes];
+    let quotes = await fetchQuotesAsync();
 
     if (statusFilter && statusFilter !== 'all') {
       quotes = quotes.filter((q) => q.status === statusFilter);
@@ -91,12 +90,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Please enter a valid WhatsApp number.' }, { status: 400 });
     }
 
-    await syncDatabaseFromCloud();
-    const db = getDatabase();
-
     // Auto-generate reference ID: CP-2026-XXXX
-    const nextNumber = (db.quotes.length + 1).toString().padStart(3, '0');
-    const quoteId = `CP-2026-${Date.now().toString().slice(-4)}${nextNumber}`;
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const quoteId = `CP-2026-${Date.now().toString().slice(-4)}${randomSuffix}`;
 
     const validContactMethods: ('Phone' | 'WhatsApp' | 'Email')[] = ['WhatsApp', 'Phone', 'Email'];
     const contactMethod: 'Phone' | 'WhatsApp' | 'Email' = validContactMethods.includes(preferredContact)
@@ -119,13 +115,9 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    db.quotes.unshift(newQuote);
-
-    // Save database safely: disk persistence issues should never abort a registered quote
-    try {
-      saveDatabase(db);
-    } catch (saveErr) {
-      console.warn('[DB] Warning: Could not persist quote to disk:', saveErr);
+    const inserted = await insertQuoteAsync(newQuote);
+    if (!inserted) {
+      console.warn('[DB] Warning: Could not persist quote, fallback active');
     }
 
     console.log(`[AUDIT] New quote request received: ${quoteId} from IP: ${ip}`);
@@ -133,7 +125,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, quote: newQuote });
   } catch (error: unknown) {
     console.error('Error submitting quote:', error);
-    return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to submit quote request. Please contact us directly via WhatsApp or Call.') }, { status: 500 });
+    return NextResponse.json(
+      { error: getSafeErrorMessage(error, 'Failed to submit quote request. Please contact us directly via WhatsApp or Call.') },
+      { status: 500 }
+    );
   }
 }
 
@@ -156,24 +151,22 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Valid quote ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    const quoteIndex = db.quotes.findIndex((q) => q.id === id);
-
-    if (quoteIndex === -1) {
-      return NextResponse.json({ error: 'Quote not found.' }, { status: 404 });
-    }
-
     const allowedStatuses = ['New', 'Contacted', 'Quoted', 'In Progress', 'Completed', 'Cancelled'];
+    const updates: Partial<QuoteRequest> = {};
+
     if (status && allowedStatuses.includes(status)) {
-      db.quotes[quoteIndex].status = status as any;
+      updates.status = status as any;
     }
     if (internalNotes !== undefined && typeof internalNotes === 'string') {
-      db.quotes[quoteIndex].internalNotes = sanitizeText(internalNotes, 3000);
+      updates.internalNotes = sanitizeText(internalNotes, 3000);
     }
-    db.quotes[quoteIndex].updatedAt = new Date().toISOString();
 
-    saveDatabase(db);
-    return NextResponse.json({ success: true, quote: db.quotes[quoteIndex] });
+    const success = await updateQuoteAsync(id, updates);
+    if (!success) {
+      return NextResponse.json({ error: 'Quote not found or could not be updated.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Error updating quote:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to update quote.') }, { status: 500 });
@@ -199,10 +192,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Quote ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    db.quotes = db.quotes.filter((q) => q.id !== id);
-    saveDatabase(db);
-
+    await deleteQuoteAsync(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Error deleting quote:', error);

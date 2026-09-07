@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase, syncDatabaseFromCloud } from '@/lib/db';
+import { fetchReviewsAsync, insertReviewAsync, updateReviewAsync, deleteReviewAsync, syncDatabaseFromCloud } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { Review, ReviewStatus } from '@/lib/schema';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
@@ -12,13 +12,12 @@ export async function GET(req: NextRequest) {
   try {
     await syncDatabaseFromCloud();
     const session = await getAdminSession();
-    const db = getDatabase();
 
     // If admin session verified, allow filtering and viewing all reviews with status
     if (session) {
       const { searchParams } = new URL(req.url);
       const status = searchParams.get('status');
-      let reviews = [...db.reviews];
+      let reviews = await fetchReviewsAsync(true);
       if (status && status !== 'all') {
         reviews = reviews.filter((r) => r.status === status);
       }
@@ -27,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Public visitor: return ONLY approved reviews
-    const approved = db.reviews.filter((r) => r.status === 'approved');
+    const approved = await fetchReviewsAsync(false);
     approved.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return NextResponse.json({ reviews: approved });
   } catch (error: unknown) {
@@ -76,7 +75,6 @@ export async function POST(req: NextRequest) {
     const validLangs = ['en', 'mr', 'hi'];
     const chosenLang = validLangs.includes(language) ? language : 'en';
 
-    const db = getDatabase();
     const reviewId = `rev-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const newReview: Review = {
@@ -87,16 +85,11 @@ export async function POST(req: NextRequest) {
       reviewText: sanitizeText(reviewText, 1500),
       language: chosenLang as any,
       status: 'pending', // Strictly enforce pending status regardless of input payload
-      featured: false,  // Strictly enforce false regardless of input payload
+      featured: false, // Strictly enforce false regardless of input payload
       createdAt: new Date().toISOString(),
     };
 
-    db.reviews.unshift(newReview);
-    try {
-      saveDatabase(db);
-    } catch (saveErr) {
-      console.warn('[DB] Warning: Could not persist review to disk:', saveErr);
-    }
+    await insertReviewAsync(newReview);
 
     console.log(`[AUDIT] New customer review submitted: ${reviewId} (pending moderation) from IP: ${ip}`);
 
@@ -130,34 +123,32 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Review ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    const reviewIndex = db.reviews.findIndex((r) => r.id === id);
-
-    if (reviewIndex === -1) {
-      return NextResponse.json({ error: 'Review not found.' }, { status: 404 });
-    }
-
+    const updates: Partial<Review> = {};
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
-      db.reviews[reviewIndex].status = status as ReviewStatus;
+      updates.status = status as ReviewStatus;
     }
     if (featured !== undefined) {
-      db.reviews[reviewIndex].featured = Boolean(featured);
+      updates.featured = Boolean(featured);
     }
     if (customerName && typeof customerName === 'string') {
-      db.reviews[reviewIndex].customerName = sanitizeText(customerName, 100);
+      updates.customerName = sanitizeText(customerName, 100);
     }
     if (reviewText && typeof reviewText === 'string') {
-      db.reviews[reviewIndex].reviewText = sanitizeText(reviewText, 1500);
+      updates.reviewText = sanitizeText(reviewText, 1500);
     }
     if (location !== undefined && typeof location === 'string') {
-      db.reviews[reviewIndex].location = sanitizeText(location, 100);
+      updates.location = sanitizeText(location, 100);
     }
     if (rating !== undefined) {
-      db.reviews[reviewIndex].rating = Math.max(1, Math.min(5, Math.round(Number(rating))));
+      updates.rating = Math.max(1, Math.min(5, Math.round(Number(rating))));
     }
 
-    saveDatabase(db);
-    return NextResponse.json({ success: true, review: db.reviews[reviewIndex] });
+    const success = await updateReviewAsync(id, updates);
+    if (!success) {
+      return NextResponse.json({ error: 'Review not found or could not be updated.' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Error updating review:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to update review.') }, { status: 500 });
@@ -183,10 +174,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Review ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    db.reviews = db.reviews.filter((r) => r.id !== id);
-    saveDatabase(db);
-
+    await deleteReviewAsync(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Error deleting review:', error);

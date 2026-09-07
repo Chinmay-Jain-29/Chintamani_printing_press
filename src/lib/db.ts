@@ -1,7 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { AppDatabase, BusinessInfo, Branding, HomepageConfig, Service, PortfolioItem, Review, QuoteRequest, SocialLinks, SeoSettings, AdminUser } from './schema';
+import {
+  AppDatabase,
+  BusinessInfo,
+  Branding,
+  HomepageConfig,
+  Service,
+  PortfolioItem,
+  Review,
+  QuoteRequest,
+  SocialLinks,
+  SeoSettings,
+  AdminUser,
+  SupportedLanguage,
+} from './schema';
+import { getSupabaseAdmin, getSupabaseClient, isSupabaseConfigured } from './supabase';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const BUNDLED_DB_FILE = path.join(DATA_DIR, 'store.json');
@@ -36,7 +50,7 @@ export function verifyPassword(password: string, hash: string, salt: string): bo
 
 const defaultAdminPassword = hashPassword('Chintamani@1999', undefined, 100000);
 
-const initialBusinessInfo: BusinessInfo = {
+export const initialBusinessInfo: BusinessInfo = {
   name: 'NEW CHINTAMANI PRINTING PRESS',
   owner: 'Mr. Prakash Devendra Jain',
   establishedYear: 1999,
@@ -55,7 +69,7 @@ const initialBusinessInfo: BusinessInfo = {
   businessHours_en: '8:00 AM – 8:30 PM (All Days)',
   businessHours_mr: 'सकाळी ८:०० ते रात्री ८:३० (सर्व दिवस)',
   businessHours_hi: 'सुबह ८:०० से रात ८:३० (सभी दिन)',
-  googleMapsUrl: '', // Editable in Admin
+  googleMapsUrl: '',
   ownerTitle_en: 'Founder & Proprietor',
   ownerTitle_mr: 'संस्थापक व संचालक',
   ownerTitle_hi: 'संस्थापक व संचालक',
@@ -65,14 +79,14 @@ const initialBusinessInfo: BusinessInfo = {
   ownerPhotoUrl: '/assets/owner-prakash-jain.jpg',
 };
 
-const initialBranding: Branding = {
+export const initialBranding: Branding = {
   logoUrl: null,
   darkLogoUrl: null,
   useDefaultVectorLogo: true,
   altText: 'New Chintamani Printing Press Logo',
 };
 
-const initialHomepage: HomepageConfig = {
+export const initialHomepage: HomepageConfig = {
   hero: {
     badge_en: '✦ 25+ Years of Printing Excellence in Dongaon',
     badge_mr: '✦ डोणगावमध्ये २५+ वर्षांचा मुद्रण अनुभव व विश्वास',
@@ -182,7 +196,7 @@ const initialHomepage: HomepageConfig = {
   showQuoteBanner: true,
 };
 
-const initialServices: Service[] = [
+export const initialServices: Service[] = [
   {
     id: 'srv-1',
     slug: 'visiting-cards',
@@ -377,7 +391,7 @@ const initialServices: Service[] = [
   },
 ];
 
-const initialPortfolio: PortfolioItem[] = [
+export const initialPortfolio: PortfolioItem[] = [
   {
     id: 'port-1',
     title_en: 'Royal Gold Foil Wedding Invitation',
@@ -470,7 +484,7 @@ const initialPortfolio: PortfolioItem[] = [
   },
 ];
 
-const initialReviews: Review[] = [
+export const initialReviews: Review[] = [
   {
     id: 'rev-1',
     customerName: 'Sanjay Deshmukh',
@@ -506,7 +520,7 @@ const initialReviews: Review[] = [
   },
 ];
 
-const initialQuotes: QuoteRequest[] = [
+export const initialQuotes: QuoteRequest[] = [
   {
     id: 'CP-2026-001',
     customerName: 'Ramesh Patil',
@@ -524,14 +538,14 @@ const initialQuotes: QuoteRequest[] = [
   },
 ];
 
-const initialSocialLinks: SocialLinks = {
+export const initialSocialLinks: SocialLinks = {
   instagram: '',
   facebook: '',
   youtube: '',
   whatsappChannel: 'https://wa.me/919421396905',
 };
 
-const initialSeo: SeoSettings = {
+export const initialSeo: SeoSettings = {
   siteTitle_en: 'New Chintamani Printing Press | Trusted Printing Since 1999 | Dongaon',
   siteTitle_mr: 'न्यू चिंतामणी प्रिंटिंग प्रेस | १९९९ पासून विश्वासार्ह मुद्रण | डोणगाव',
   siteTitle_hi: 'न्यू चिंतामणी प्रिंटिंग प्रेस | १९९९ से भरोसेमंद मुद्रण | डोणगांव',
@@ -544,7 +558,7 @@ const initialSeo: SeoSettings = {
   ogImage: '/assets/og-image.png',
 };
 
-const initialAdmin: AdminUser = {
+export const initialAdmin: AdminUser = {
   id: 'admin-1',
   email: 'chintamanidongaon@gmail.com',
   passwordHash: defaultAdminPassword.hash,
@@ -552,7 +566,7 @@ const initialAdmin: AdminUser = {
   tokenVersion: 1,
 };
 
-const initialTranslations: Record<string, Record<string, string>> = {
+export const initialTranslations: Record<string, Record<SupportedLanguage, string>> = {
   navHome: { en: 'Home', mr: 'मुख्यपृष्ठ', hi: 'होम' },
   navAbout: { en: 'About Us', mr: 'आमच्याबद्दल', hi: 'हमारे बारे में' },
   navServices: { en: 'Services', mr: 'सेवा', hi: 'सेवाएं' },
@@ -566,7 +580,7 @@ const initialTranslations: Record<string, Record<string, string>> = {
   footerRights: { en: 'All rights reserved.', mr: 'सर्व हक्क राखीव.', hi: 'सर्वाधिकार सुरक्षित.' },
 };
 
-function getDefaultDatabase(): AppDatabase {
+export function getDefaultDatabase(): AppDatabase {
   return {
     businessInfo: initialBusinessInfo,
     branding: initialBranding,
@@ -578,11 +592,647 @@ function getDefaultDatabase(): AppDatabase {
     socialLinks: initialSocialLinks,
     seo: initialSeo,
     admin: initialAdmin,
-    translations: initialTranslations as any,
+    translations: initialTranslations,
   };
 }
 
 let memoryDb: AppDatabase | null = null;
+
+// ============================================================================
+// SUPABASE ROW TRANSFORMERS
+// ============================================================================
+
+export function rowToService(row: any): Service {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name_en: row.name_en,
+    name_mr: row.name_mr,
+    name_hi: row.name_hi,
+    desc_en: row.desc_en,
+    desc_mr: row.desc_mr,
+    desc_hi: row.desc_hi,
+    category: row.category,
+    icon: row.icon,
+    imageUrl: row.image_url || undefined,
+    featured: Boolean(row.featured),
+    comingSoon: Boolean(row.coming_soon),
+    visible: Boolean(row.visible),
+    sortOrder: Number(row.sort_order ?? 0),
+  };
+}
+
+export function serviceToRow(item: Service): Record<string, any> {
+  return {
+    id: item.id,
+    slug: item.slug,
+    name_en: item.name_en,
+    name_mr: item.name_mr,
+    name_hi: item.name_hi,
+    desc_en: item.desc_en,
+    desc_mr: item.desc_mr,
+    desc_hi: item.desc_hi,
+    category: item.category,
+    icon: item.icon,
+    image_url: item.imageUrl || null,
+    featured: item.featured,
+    coming_soon: item.comingSoon,
+    visible: item.visible,
+    sort_order: item.sortOrder,
+  };
+}
+
+export function rowToPortfolio(row: any): PortfolioItem {
+  return {
+    id: row.id,
+    title_en: row.title_en,
+    title_mr: row.title_mr,
+    title_hi: row.title_hi,
+    desc_en: row.desc_en,
+    desc_mr: row.desc_mr,
+    desc_hi: row.desc_hi,
+    category: row.category,
+    imageUrl: row.image_url,
+    thumbnailUrl: row.thumbnail_url || undefined,
+    featured: Boolean(row.featured),
+    topWork: Boolean(row.top_work),
+    visible: Boolean(row.visible),
+    sortOrder: Number(row.sort_order ?? 0),
+  };
+}
+
+export function portfolioToRow(item: PortfolioItem): Record<string, any> {
+  return {
+    id: item.id,
+    title_en: item.title_en,
+    title_mr: item.title_mr,
+    title_hi: item.title_hi,
+    desc_en: item.desc_en,
+    desc_mr: item.desc_mr,
+    desc_hi: item.desc_hi,
+    category: item.category,
+    image_url: item.imageUrl,
+    thumbnail_url: item.thumbnailUrl || null,
+    featured: item.featured,
+    top_work: item.topWork,
+    visible: item.visible,
+    sort_order: item.sortOrder,
+  };
+}
+
+export function rowToReview(row: any): Review {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    location: row.location || undefined,
+    rating: Number(row.rating),
+    reviewText: row.review_text,
+    language: row.language as SupportedLanguage,
+    customerPhoto: row.customer_photo || undefined,
+    status: row.status,
+    featured: Boolean(row.featured),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  };
+}
+
+export function reviewToRow(item: Review): Record<string, any> {
+  return {
+    id: item.id,
+    customer_name: item.customerName,
+    location: item.location || null,
+    rating: item.rating,
+    review_text: item.reviewText,
+    language: item.language,
+    customer_photo: item.customerPhoto || null,
+    status: item.status,
+    featured: item.featured,
+    created_at: item.createdAt,
+  };
+}
+
+export function rowToQuote(row: any): QuoteRequest {
+  return {
+    id: row.id,
+    customerName: row.customer_name,
+    phone: row.phone,
+    whatsapp: row.whatsapp || undefined,
+    email: row.email || undefined,
+    service: row.service,
+    quantity: row.quantity || undefined,
+    sizeSpecification: row.size_specification || undefined,
+    requirements: row.requirements,
+    preferredContact: row.preferred_contact,
+    status: row.status,
+    internalNotes: row.internal_notes || undefined,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  };
+}
+
+export function quoteToRow(item: QuoteRequest): Record<string, any> {
+  return {
+    id: item.id,
+    customer_name: item.customerName,
+    phone: item.phone,
+    whatsapp: item.whatsapp || null,
+    email: item.email || null,
+    service: item.service,
+    quantity: item.quantity || null,
+    size_specification: item.sizeSpecification || null,
+    requirements: item.requirements,
+    preferred_contact: item.preferredContact,
+    status: item.status,
+    internal_notes: item.internalNotes || null,
+    created_at: item.createdAt,
+  };
+}
+
+export function rowToAdmin(row: any): AdminUser {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    salt: row.salt,
+    tokenVersion: row.token_version ?? 1,
+    resetTokenHash: row.reset_token_hash || undefined,
+    resetExpires: row.reset_expires || undefined,
+  };
+}
+
+// ============================================================================
+// ASYNC SUPABASE DATA RETRIEVAL & CRUD HELPERS
+// ============================================================================
+
+/**
+ * Loads the complete database state asynchronously from Supabase PostgreSQL.
+ * Falls back safely to bundled defaults if Supabase is unavailable.
+ */
+export async function getDatabaseAsync(): Promise<AppDatabase> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) {
+    return getDatabase();
+  }
+
+  try {
+    const [servicesRes, portfolioRes, reviewsRes, quotesRes, settingsRes, translationsRes, adminRes] =
+      await Promise.all([
+        client.from('services').select('*').order('sort_order', { ascending: true }),
+        client.from('portfolio').select('*').order('sort_order', { ascending: true }),
+        client.from('reviews').select('*').order('created_at', { ascending: false }),
+        client.from('quotes').select('*').order('created_at', { ascending: false }),
+        client.from('site_settings').select('*'),
+        client.from('translations').select('*'),
+        client.from('admin_users').select('*').limit(1).maybeSingle(),
+      ]);
+
+    // Parse site_settings key-value entries
+    const settingsMap: Record<string, any> = {};
+    if (settingsRes.data) {
+      for (const row of settingsRes.data) {
+        settingsMap[row.key] = row.data;
+      }
+    }
+
+    // Parse translations key-value entries
+    const translationsMap: Record<string, Record<SupportedLanguage, string>> = { ...initialTranslations };
+    if (translationsRes.data && translationsRes.data.length > 0) {
+      for (const row of translationsRes.data) {
+        translationsMap[row.key] = {
+          en: row.en,
+          mr: row.mr,
+          hi: row.hi,
+        };
+      }
+    }
+
+    const defaultDb = getDefaultDatabase();
+
+    const db: AppDatabase = {
+      businessInfo: settingsMap['business_info'] || defaultDb.businessInfo,
+      branding: settingsMap['branding'] || defaultDb.branding,
+      homepage: settingsMap['homepage_config'] || defaultDb.homepage,
+      socialLinks: settingsMap['social_links'] || defaultDb.socialLinks,
+      seo: settingsMap['seo_settings'] || defaultDb.seo,
+      services: servicesRes.data && servicesRes.data.length > 0
+        ? servicesRes.data.map(rowToService)
+        : defaultDb.services,
+      portfolio: portfolioRes.data && portfolioRes.data.length > 0
+        ? portfolioRes.data.map(rowToPortfolio)
+        : defaultDb.portfolio,
+      reviews: reviewsRes.data && reviewsRes.data.length > 0
+        ? reviewsRes.data.map(rowToReview)
+        : defaultDb.reviews,
+      quotes: quotesRes.data && quotesRes.data.length > 0
+        ? quotesRes.data.map(rowToQuote)
+        : defaultDb.quotes,
+      admin: adminRes.data ? rowToAdmin(adminRes.data) : defaultDb.admin,
+      translations: translationsMap,
+    };
+
+    memoryDb = db;
+    return db;
+  } catch (error) {
+    console.error('[DB] Error querying Supabase database, using local fallback:', error);
+    return getDatabase();
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Services
+// ----------------------------------------------------------------------------
+export async function fetchServicesAsync(): Promise<Service[]> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) return getDatabase().services;
+
+  const { data, error } = await client.from('services').select('*').order('sort_order', { ascending: true });
+  if (error || !data) {
+    console.warn('[DB] fetchServicesAsync error:', error?.message);
+    return getDatabase().services;
+  }
+  return data.map(rowToService);
+}
+
+export async function upsertServiceAsync(service: Service): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    const idx = db.services.findIndex((s) => s.id === service.id);
+    if (idx >= 0) db.services[idx] = service;
+    else db.services.push(service);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('services').upsert(serviceToRow(service));
+  if (error) {
+    console.error('[DB] upsertServiceAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteServiceAsync(id: string): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.services = db.services.filter((s) => s.id !== id);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('services').delete().eq('id', id);
+  if (error) {
+    console.error('[DB] deleteServiceAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Portfolio
+// ----------------------------------------------------------------------------
+export async function fetchPortfolioAsync(): Promise<PortfolioItem[]> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) return getDatabase().portfolio;
+
+  const { data, error } = await client.from('portfolio').select('*').order('sort_order', { ascending: true });
+  if (error || !data) {
+    console.warn('[DB] fetchPortfolioAsync error:', error?.message);
+    return getDatabase().portfolio;
+  }
+  return data.map(rowToPortfolio);
+}
+
+export async function upsertPortfolioAsync(item: PortfolioItem): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    const idx = db.portfolio.findIndex((p) => p.id === item.id);
+    if (idx >= 0) db.portfolio[idx] = item;
+    else db.portfolio.push(item);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('portfolio').upsert(portfolioToRow(item));
+  if (error) {
+    console.error('[DB] upsertPortfolioAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deletePortfolioAsync(id: string): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.portfolio = db.portfolio.filter((p) => p.id !== id);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('portfolio').delete().eq('id', id);
+  if (error) {
+    console.error('[DB] deletePortfolioAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Quotes
+// ----------------------------------------------------------------------------
+export async function fetchQuotesAsync(): Promise<QuoteRequest[]> {
+  const client = getSupabaseAdmin();
+  if (!client) return getDatabase().quotes;
+
+  const { data, error } = await client.from('quotes').select('*').order('created_at', { ascending: false });
+  if (error || !data) {
+    console.warn('[DB] fetchQuotesAsync error:', error?.message);
+    return getDatabase().quotes;
+  }
+  return data.map(rowToQuote);
+}
+
+export async function insertQuoteAsync(quote: QuoteRequest): Promise<boolean> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) {
+    const db = getDatabase();
+    db.quotes.unshift(quote);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('quotes').insert(quoteToRow(quote));
+  if (error) {
+    console.error('[DB] insertQuoteAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function updateQuoteAsync(id: string, updates: Partial<QuoteRequest>): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    const idx = db.quotes.findIndex((q) => q.id === id);
+    if (idx >= 0) {
+      db.quotes[idx] = { ...db.quotes[idx], ...updates, updatedAt: new Date().toISOString() };
+      saveDatabase(db);
+      return true;
+    }
+    return false;
+  }
+
+  const payload: Record<string, any> = {};
+  if (updates.status !== undefined) payload.status = updates.status;
+  if (updates.internalNotes !== undefined) payload.internal_notes = updates.internalNotes;
+  if (updates.customerName !== undefined) payload.customer_name = updates.customerName;
+  if (updates.phone !== undefined) payload.phone = updates.phone;
+  if (updates.whatsapp !== undefined) payload.whatsapp = updates.whatsapp;
+  if (updates.email !== undefined) payload.email = updates.email;
+  if (updates.service !== undefined) payload.service = updates.service;
+  if (updates.quantity !== undefined) payload.quantity = updates.quantity;
+  if (updates.sizeSpecification !== undefined) payload.size_specification = updates.sizeSpecification;
+  if (updates.requirements !== undefined) payload.requirements = updates.requirements;
+  if (updates.preferredContact !== undefined) payload.preferred_contact = updates.preferredContact;
+
+  const { error } = await client.from('quotes').update(payload).eq('id', id);
+  if (error) {
+    console.error('[DB] updateQuoteAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteQuoteAsync(id: string): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.quotes = db.quotes.filter((q) => q.id !== id);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('quotes').delete().eq('id', id);
+  if (error) {
+    console.error('[DB] deleteQuoteAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Reviews
+// ----------------------------------------------------------------------------
+export async function fetchReviewsAsync(adminMode = false): Promise<Review[]> {
+  const client = adminMode ? getSupabaseAdmin() : (getSupabaseClient() || getSupabaseAdmin());
+  if (!client) {
+    const all = getDatabase().reviews;
+    return adminMode ? all : all.filter((r) => r.status === 'approved');
+  }
+
+  let query = client.from('reviews').select('*').order('created_at', { ascending: false });
+  if (!adminMode) {
+    query = query.eq('status', 'approved');
+  }
+
+  const { data, error } = await query;
+  if (error || !data) {
+    console.warn('[DB] fetchReviewsAsync error:', error?.message);
+    const all = getDatabase().reviews;
+    return adminMode ? all : all.filter((r) => r.status === 'approved');
+  }
+  return data.map(rowToReview);
+}
+
+export async function insertReviewAsync(review: Review): Promise<boolean> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) {
+    const db = getDatabase();
+    db.reviews.unshift(review);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('reviews').insert(reviewToRow(review));
+  if (error) {
+    console.error('[DB] insertReviewAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function updateReviewAsync(id: string, updates: Partial<Review>): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    const idx = db.reviews.findIndex((r) => r.id === id);
+    if (idx >= 0) {
+      db.reviews[idx] = { ...db.reviews[idx], ...updates };
+      saveDatabase(db);
+      return true;
+    }
+    return false;
+  }
+
+  const payload: Record<string, any> = {};
+  if (updates.status !== undefined) payload.status = updates.status;
+  if (updates.featured !== undefined) payload.featured = updates.featured;
+  if (updates.customerName !== undefined) payload.customer_name = updates.customerName;
+  if (updates.location !== undefined) payload.location = updates.location;
+  if (updates.rating !== undefined) payload.rating = updates.rating;
+  if (updates.reviewText !== undefined) payload.review_text = updates.reviewText;
+  if (updates.language !== undefined) payload.language = updates.language;
+  if (updates.customerPhoto !== undefined) payload.customer_photo = updates.customerPhoto;
+
+  const { error } = await client.from('reviews').update(payload).eq('id', id);
+  if (error) {
+    console.error('[DB] updateReviewAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteReviewAsync(id: string): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.reviews = db.reviews.filter((r) => r.id !== id);
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('reviews').delete().eq('id', id);
+  if (error) {
+    console.error('[DB] deleteReviewAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Site Settings (Singletons: business_info, branding, homepage_config, social_links, seo_settings)
+// ----------------------------------------------------------------------------
+export async function fetchSiteSettingAsync<T>(key: string, fallback: T): Promise<T> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) return fallback;
+
+  const { data, error } = await client.from('site_settings').select('data').eq('key', key).maybeSingle();
+  if (error || !data || !data.data) {
+    return fallback;
+  }
+  return data.data as T;
+}
+
+export async function saveSiteSettingAsync<T>(key: string, data: T): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    if (key === 'business_info') db.businessInfo = data as any;
+    else if (key === 'branding') db.branding = data as any;
+    else if (key === 'homepage_config') db.homepage = data as any;
+    else if (key === 'social_links') db.socialLinks = data as any;
+    else if (key === 'seo_settings') db.seo = data as any;
+    saveDatabase(db);
+    return true;
+  }
+
+  const { error } = await client.from('site_settings').upsert({ key, data });
+  if (error) {
+    console.error(`[DB] saveSiteSettingAsync for ${key} error:`, error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Translations
+// ----------------------------------------------------------------------------
+export async function fetchTranslationsAsync(): Promise<Record<string, Record<SupportedLanguage, string>>> {
+  const client = getSupabaseAdmin() || getSupabaseClient();
+  if (!client) return getDatabase().translations;
+
+  const { data, error } = await client.from('translations').select('*');
+  if (error || !data || data.length === 0) {
+    return getDatabase().translations;
+  }
+
+  const map: Record<string, Record<SupportedLanguage, string>> = {};
+  for (const row of data) {
+    map[row.key] = { en: row.en, mr: row.mr, hi: row.hi };
+  }
+  return map;
+}
+
+export async function saveTranslationsAsync(
+  translations: Record<string, Record<SupportedLanguage, string>>
+): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.translations = translations;
+    saveDatabase(db);
+    return true;
+  }
+
+  const rows = Object.entries(translations).map(([key, value]) => ({
+    key,
+    en: value.en || '',
+    mr: value.mr || '',
+    hi: value.hi || '',
+  }));
+
+  const { error } = await client.from('translations').upsert(rows);
+  if (error) {
+    console.error('[DB] saveTranslationsAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// Entity: Admin User
+// ----------------------------------------------------------------------------
+export async function fetchAdminUserAsync(): Promise<AdminUser> {
+  const client = getSupabaseAdmin();
+  if (!client) return getDatabase().admin;
+
+  const { data, error } = await client.from('admin_users').select('*').limit(1).maybeSingle();
+  if (error || !data) {
+    return getDatabase().admin;
+  }
+  return rowToAdmin(data);
+}
+
+export async function updateAdminUserAsync(updates: Partial<AdminUser>): Promise<boolean> {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    const db = getDatabase();
+    db.admin = { ...db.admin, ...updates };
+    saveDatabase(db);
+    return true;
+  }
+
+  const payload: Record<string, any> = {};
+  if (updates.email !== undefined) payload.email = updates.email;
+  if (updates.passwordHash !== undefined) payload.password_hash = updates.passwordHash;
+  if (updates.salt !== undefined) payload.salt = updates.salt;
+  if (updates.tokenVersion !== undefined) payload.token_version = updates.tokenVersion;
+  if (updates.resetTokenHash !== undefined) payload.reset_token_hash = updates.resetTokenHash;
+  if (updates.resetExpires !== undefined) payload.reset_expires = updates.resetExpires;
+
+  const { error } = await client.from('admin_users').update(payload).eq('id', updates.id || 'admin-1');
+  if (error) {
+    console.error('[DB] updateAdminUserAsync error:', error);
+    return false;
+  }
+  return true;
+}
+
+// ============================================================================
+// SYNCHRONOUS FALLBACK & BACKWARD COMPATIBILITY BRIDGE
+// ============================================================================
 
 export function getDatabase(): AppDatabase {
   if (memoryDb) {
@@ -590,7 +1240,6 @@ export function getDatabase(): AppDatabase {
   }
 
   try {
-    // In serverless hosting, ensure /tmp/store.json is initialized from bundled store.json if not present
     if (IS_SERVERLESS && !fs.existsSync(ACTIVE_DB_FILE)) {
       if (fs.existsSync(BUNDLED_DB_FILE)) {
         try {
@@ -630,27 +1279,24 @@ export function getDatabase(): AppDatabase {
 }
 
 export function saveDatabase(data: AppDatabase): void {
-  // Always update in-memory representation so current process has immediate consistency
   memoryDb = data;
 
   try {
     const payload = JSON.stringify(data, null, 2);
 
     if (IS_SERVERLESS) {
-      // In serverless, write to /tmp which is the only writable directory
       try {
         fs.writeFileSync(ACTIVE_DB_FILE, payload, 'utf-8');
       } catch (err) {
         console.warn('[DB] Warning: Could not write to /tmp/store.json:', err);
       }
     } else {
-      // Local development or persistent host: write to data/store.json
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
       try {
         fs.writeFileSync(BUNDLED_DB_FILE, payload, 'utf-8');
-      } catch (writeErr) {
+      } catch {
         const tempFile = `${BUNDLED_DB_FILE}.tmp.${Date.now()}`;
         fs.writeFileSync(tempFile, payload, 'utf-8');
         try {
@@ -661,55 +1307,14 @@ export function saveDatabase(data: AppDatabase): void {
         }
       }
     }
-
-    // Optional Cloud KV (Vercel KV / Upstash Redis) persistence via REST API
-    // Zero dependencies: works via native fetch when KV environment variables are present
-    const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (kvUrl && kvToken) {
-      fetch(`${kvUrl}/set/chintamani_store_db`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${kvToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }).catch((kvErr) => console.warn('[DB] KV sync warning:', kvErr));
-    }
   } catch (error) {
     console.warn('[DB] Warning: Could not persist database to disk:', error);
   }
 }
 
-/**
- * Asynchronously sync database from cloud KV (Vercel KV / Upstash Redis) if configured.
- */
 export async function syncDatabaseFromCloud(): Promise<AppDatabase | null> {
-  const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!kvUrl || !kvToken) return null;
-
-  try {
-    const res = await fetch(`${kvUrl}/get/chintamani_store_db`, {
-      headers: { Authorization: `Bearer ${kvToken}` },
-      cache: 'no-store',
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.result) {
-        const rawJson = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-        const merged = { ...getDefaultDatabase(), ...rawJson };
-        memoryDb = merged;
-        if (IS_SERVERLESS) {
-          try {
-            fs.writeFileSync(ACTIVE_DB_FILE, JSON.stringify(merged, null, 2), 'utf-8');
-          } catch {}
-        }
-        return merged;
-      }
-    }
-  } catch (err) {
-    console.warn('[DB] Cloud KV sync warning:', err);
+  if (isSupabaseConfigured()) {
+    return getDatabaseAsync();
   }
   return null;
 }

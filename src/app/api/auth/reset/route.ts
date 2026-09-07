@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getDatabase, saveDatabase, hashPassword } from '@/lib/db';
+import { fetchAdminUserAsync, updateAdminUserAsync, hashPassword } from '@/lib/db';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getSafeErrorMessage } from '@/lib/security';
 
@@ -38,14 +38,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Password exceeds maximum allowed length.' }, { status: 400 });
     }
 
-    const db = getDatabase();
+    const admin = await fetchAdminUserAsync();
 
     // Check expiration
-    if (db.admin.resetExpires && new Date(db.admin.resetExpires).getTime() < Date.now()) {
-      delete db.admin.resetTokenHash;
-      delete db.admin.resetToken;
-      delete db.admin.resetExpires;
-      saveDatabase(db);
+    if (admin.resetExpires && new Date(admin.resetExpires).getTime() < Date.now()) {
+      await updateAdminUserAsync({
+        id: admin.id,
+        resetTokenHash: undefined,
+        resetExpires: undefined,
+      });
       return NextResponse.json({ error: 'Reset PIN has expired. Please request a new one.' }, { status: 400 });
     }
 
@@ -53,15 +54,15 @@ export async function POST(req: NextRequest) {
     let isTokenValid = false;
     const inputHash = crypto.createHash('sha256').update(cleanToken).digest('hex');
 
-    if (db.admin.resetTokenHash) {
+    if (admin.resetTokenHash) {
       const inputBuf = Buffer.from(inputHash, 'hex');
-      const storedBuf = Buffer.from(db.admin.resetTokenHash, 'hex');
+      const storedBuf = Buffer.from(admin.resetTokenHash, 'hex');
       if (inputBuf.length === storedBuf.length && crypto.timingSafeEqual(inputBuf, storedBuf)) {
         isTokenValid = true;
       }
-    } else if (db.admin.resetToken) {
+    } else if (admin.resetToken) {
       // Legacy plaintext fallback
-      isTokenValid = cleanToken === db.admin.resetToken.trim();
+      isTokenValid = cleanToken === admin.resetToken.trim();
     }
 
     if (!isTokenValid) {
@@ -71,18 +72,16 @@ export async function POST(req: NextRequest) {
 
     // Hash new password using 100,000 iterations PBKDF2 SHA-512
     const { hash, salt } = hashPassword(newPassword);
-    db.admin.passwordHash = hash;
-    db.admin.salt = salt;
 
-    // Single-use enforcement: remove reset tokens immediately
-    delete db.admin.resetTokenHash;
-    delete db.admin.resetToken;
-    delete db.admin.resetExpires;
-
-    // Increment tokenVersion to revoke all active sessions immediately
-    db.admin.tokenVersion = (db.admin.tokenVersion || 1) + 1;
-
-    saveDatabase(db);
+    // Update credentials, clear reset tokens, and increment tokenVersion to revoke all active sessions
+    await updateAdminUserAsync({
+      id: admin.id,
+      passwordHash: hash,
+      salt: salt,
+      resetTokenHash: undefined,
+      resetExpires: undefined,
+      tokenVersion: (admin.tokenVersion || 1) + 1,
+    });
 
     console.log(`[SECURITY AUDIT] Admin password was reset successfully from IP: ${ip}. All prior sessions revoked.`);
 

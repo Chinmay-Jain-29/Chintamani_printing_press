@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { getAdminSession } from '@/lib/auth';
 import { verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,14 +118,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cleanBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'upload';
+    const randomHex = crypto.randomBytes(6).toString('hex');
+    const safeFilename = `${cleanBase}-${Date.now()}-${randomHex}${ext}`;
+
+    // 1. If Supabase is configured, upload to Supabase Storage bucket for permanent cloud hosting
+    const supabaseAdmin = getSupabaseAdmin();
+    if (supabaseAdmin) {
+      const bucketName = process.env.SUPABASE_STORAGE_BUCKET || 'chintamani_uploads';
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from(bucketName)
+        .upload(safeFilename, buffer, {
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (!uploadError) {
+        const { data: publicUrlData } = supabaseAdmin.storage
+          .from(bucketName)
+          .getPublicUrl(safeFilename);
+
+        console.log(`[AUDIT] Uploaded to Supabase Storage bucket "${bucketName}": ${safeFilename}`);
+        return NextResponse.json({
+          success: true,
+          url: publicUrlData.publicUrl,
+          filename: safeFilename,
+        });
+      }
+
+      console.warn('[STORAGE] Supabase storage upload returned error, attempting local fallback:', uploadError.message);
+    }
+
+    // 2. Local filesystem fallback (for local development or when Supabase Storage is not yet configured)
     const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const cleanBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) || 'upload';
-    const randomHex = crypto.randomBytes(6).toString('hex');
-    const safeFilename = `${cleanBase}-${Date.now()}-${randomHex}${ext}`;
     const destinationPath = path.resolve(uploadsDir, safeFilename);
 
     // Verify path stays strictly within uploads directory (path traversal defense)
@@ -134,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     fs.writeFileSync(destinationPath, buffer);
 
-    console.log(`[AUDIT] Admin uploaded file: ${safeFilename} (${(file.size / 1024).toFixed(1)} KB)`);
+    console.log(`[AUDIT] Admin uploaded file locally: ${safeFilename} (${(file.size / 1024).toFixed(1)} KB)`);
 
     const publicUrl = `/uploads/${safeFilename}`;
     return NextResponse.json({ success: true, url: publicUrl, filename: safeFilename });

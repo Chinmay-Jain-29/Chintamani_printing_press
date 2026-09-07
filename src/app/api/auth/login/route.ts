@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, verifyPassword } from '@/lib/db';
+import { fetchAdminUserAsync, verifyPassword } from '@/lib/db';
 import { setAdminSession } from '@/lib/auth';
 import { checkRateLimit, resetRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getSafeErrorMessage } from '@/lib/security';
@@ -38,8 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDatabase();
-    const admin = db.admin;
+    const admin = await fetchAdminUserAsync();
 
     const emailMatches = cleanEmail === admin.email.toLowerCase().trim();
     // Timing-safe password verification: if email doesn't match, verify against dummy to equalize timing

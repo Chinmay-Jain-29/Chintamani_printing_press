@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { fetchPortfolioAsync, upsertPortfolioAsync, deletePortfolioAsync } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { PortfolioItem } from '@/lib/schema';
 import { sanitizeText, isValidSafeUrl, verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = getDatabase();
-  return NextResponse.json({ portfolio: db.portfolio });
+  const portfolio = await fetchPortfolioAsync();
+  return NextResponse.json({ portfolio });
 }
 
 export async function POST(req: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const item: PortfolioItem = await req.json();
-    const db = getDatabase();
+    const existing = await fetchPortfolioAsync();
 
     if (!item.title_en || typeof item.title_en !== 'string' || !item.title_en.trim()) {
       return NextResponse.json({ error: 'Work title is required.' }, { status: 400 });
@@ -60,18 +60,12 @@ export async function POST(req: NextRequest) {
 
     if (!sanitizedItem.id) {
       sanitizedItem.id = `port-${Date.now()}`;
-      sanitizedItem.sortOrder = db.portfolio.length + 1;
-      db.portfolio.unshift(sanitizedItem);
-    } else {
-      const index = db.portfolio.findIndex((p) => p.id === sanitizedItem.id);
-      if (index === -1) {
-        return NextResponse.json({ error: 'Portfolio item not found.' }, { status: 404 });
-      }
-      db.portfolio[index] = { ...db.portfolio[index], ...sanitizedItem };
+      sanitizedItem.sortOrder = existing.length + 1;
     }
 
-    saveDatabase(db);
-    return NextResponse.json({ success: true, portfolio: db.portfolio });
+    await upsertPortfolioAsync(sanitizedItem);
+    const updated = await fetchPortfolioAsync();
+    return NextResponse.json({ success: true, portfolio: updated });
   } catch (error: unknown) {
     console.error('Error saving portfolio item:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to save portfolio item.') }, { status: 500 });
@@ -94,11 +88,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Portfolio item ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    db.portfolio = db.portfolio.filter((p) => p.id !== id);
-    saveDatabase(db);
-
-    return NextResponse.json({ success: true, portfolio: db.portfolio });
+    await deletePortfolioAsync(id);
+    const updated = await fetchPortfolioAsync();
+    return NextResponse.json({ success: true, portfolio: updated });
   } catch (error: unknown) {
     console.error('Error deleting portfolio item:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to delete portfolio item.') }, { status: 500 });

@@ -1,7 +1,9 @@
-import { getDatabase } from '@/lib/db';
+import { getDatabaseAsync } from '@/lib/db';
 import { HomePageClient } from '@/components/home/HomePageClient';
 
-export default function HomePage() {
-  const database = getDatabase();
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  const database = await getDatabaseAsync();
   return <HomePageClient initialData={database} />;
 }

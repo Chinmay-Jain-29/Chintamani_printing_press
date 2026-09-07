@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { fetchServicesAsync, upsertServiceAsync, deleteServiceAsync } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { Service } from '@/lib/schema';
 import { sanitizeText, isValidSafeUrl, verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = getDatabase();
-  return NextResponse.json({ services: db.services });
+  const services = await fetchServicesAsync();
+  return NextResponse.json({ services });
 }
 
 // POST: Add or update service
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const service: Service = await req.json();
-    const db = getDatabase();
+    const existingServices = await fetchServicesAsync();
 
     if (!service.name_en || typeof service.name_en !== 'string' || !service.name_en.trim()) {
       return NextResponse.json({ error: 'Service English name is required.' }, { status: 400 });
@@ -61,18 +61,12 @@ export async function POST(req: NextRequest) {
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .slice(0, 80);
-      sanitizedService.sortOrder = db.services.length + 1;
-      db.services.push(sanitizedService);
-    } else {
-      const index = db.services.findIndex((s) => s.id === sanitizedService.id);
-      if (index === -1) {
-        return NextResponse.json({ error: 'Service not found.' }, { status: 404 });
-      }
-      db.services[index] = { ...db.services[index], ...sanitizedService };
+      sanitizedService.sortOrder = existingServices.length + 1;
     }
 
-    saveDatabase(db);
-    return NextResponse.json({ success: true, services: db.services });
+    await upsertServiceAsync(sanitizedService);
+    const updatedServices = await fetchServicesAsync();
+    return NextResponse.json({ success: true, services: updatedServices });
   } catch (error: unknown) {
     console.error('Error saving service:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to save service.') }, { status: 500 });
@@ -96,11 +90,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Service ID is required.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    db.services = db.services.filter((s) => s.id !== id);
-    saveDatabase(db);
-
-    return NextResponse.json({ success: true, services: db.services });
+    await deleteServiceAsync(id);
+    const updatedServices = await fetchServicesAsync();
+    return NextResponse.json({ success: true, services: updatedServices });
   } catch (error: unknown) {
     console.error('Error deleting service:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to delete service.') }, { status: 500 });

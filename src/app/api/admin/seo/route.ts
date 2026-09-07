@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { fetchSiteSettingAsync, saveSiteSettingAsync, initialSeo, initialSocialLinks } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
+import { SeoSettings, SocialLinks } from '@/lib/schema';
 import { sanitizeText, isValidSafeUrl, verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
@@ -8,8 +9,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = getDatabase();
-  return NextResponse.json({ seo: db.seo, socialLinks: db.socialLinks });
+  const seo = await fetchSiteSettingAsync<SeoSettings>('seo_settings', initialSeo);
+  const socialLinks = await fetchSiteSettingAsync<SocialLinks>('social_links', initialSocialLinks);
+  return NextResponse.json({ seo, socialLinks });
 }
 
 export async function POST(req: NextRequest) {
@@ -22,26 +24,28 @@ export async function POST(req: NextRequest) {
 
   try {
     const { seo, socialLinks } = await req.json();
-    const db = getDatabase();
+    let currentSeo = await fetchSiteSettingAsync<SeoSettings>('seo_settings', initialSeo);
+    let currentSocial = await fetchSiteSettingAsync<SocialLinks>('social_links', initialSocialLinks);
 
     if (seo) {
       if (seo.ogImage && !isValidSafeUrl(seo.ogImage)) {
         return NextResponse.json({ error: 'Invalid OpenGraph image URL.' }, { status: 400 });
       }
 
-      db.seo = {
-        ...db.seo,
-        siteTitle_en: seo.siteTitle_en ? sanitizeText(seo.siteTitle_en, 150) : db.seo.siteTitle_en,
-        siteTitle_mr: seo.siteTitle_mr ? sanitizeText(seo.siteTitle_mr, 150) : db.seo.siteTitle_mr,
-        siteTitle_hi: seo.siteTitle_hi ? sanitizeText(seo.siteTitle_hi, 150) : db.seo.siteTitle_hi,
-        metaDescription_en: seo.metaDescription_en ? sanitizeText(seo.metaDescription_en, 300) : db.seo.metaDescription_en,
-        metaDescription_mr: seo.metaDescription_mr ? sanitizeText(seo.metaDescription_mr, 300) : db.seo.metaDescription_mr,
-        metaDescription_hi: seo.metaDescription_hi ? sanitizeText(seo.metaDescription_hi, 300) : db.seo.metaDescription_hi,
-        keywords_en: seo.keywords_en ? sanitizeText(seo.keywords_en, 400) : db.seo.keywords_en,
-        keywords_mr: seo.keywords_mr ? sanitizeText(seo.keywords_mr, 400) : db.seo.keywords_mr,
-        keywords_hi: seo.keywords_hi ? sanitizeText(seo.keywords_hi, 400) : db.seo.keywords_hi,
-        ogImage: seo.ogImage ? String(seo.ogImage).trim() : db.seo.ogImage,
+      currentSeo = {
+        ...currentSeo,
+        siteTitle_en: seo.siteTitle_en ? sanitizeText(seo.siteTitle_en, 150) : currentSeo.siteTitle_en,
+        siteTitle_mr: seo.siteTitle_mr ? sanitizeText(seo.siteTitle_mr, 150) : currentSeo.siteTitle_mr,
+        siteTitle_hi: seo.siteTitle_hi ? sanitizeText(seo.siteTitle_hi, 150) : currentSeo.siteTitle_hi,
+        metaDescription_en: seo.metaDescription_en ? sanitizeText(seo.metaDescription_en, 300) : currentSeo.metaDescription_en,
+        metaDescription_mr: seo.metaDescription_mr ? sanitizeText(seo.metaDescription_mr, 300) : currentSeo.metaDescription_mr,
+        metaDescription_hi: seo.metaDescription_hi ? sanitizeText(seo.metaDescription_hi, 300) : currentSeo.metaDescription_hi,
+        keywords_en: seo.keywords_en ? sanitizeText(seo.keywords_en, 400) : currentSeo.keywords_en,
+        keywords_mr: seo.keywords_mr ? sanitizeText(seo.keywords_mr, 400) : currentSeo.keywords_mr,
+        keywords_hi: seo.keywords_hi ? sanitizeText(seo.keywords_hi, 400) : currentSeo.keywords_hi,
+        ogImage: seo.ogImage ? String(seo.ogImage).trim() : currentSeo.ogImage,
       };
+      await saveSiteSettingAsync('seo_settings', currentSeo);
     }
 
     if (socialLinks) {
@@ -50,14 +54,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `Invalid URL format for ${key}.` }, { status: 400 });
         }
       }
-      db.socialLinks = {
-        ...db.socialLinks,
+      currentSocial = {
+        ...currentSocial,
         ...socialLinks,
       };
+      await saveSiteSettingAsync('social_links', currentSocial);
     }
 
-    saveDatabase(db);
-    return NextResponse.json({ success: true, seo: db.seo, socialLinks: db.socialLinks });
+    return NextResponse.json({ success: true, seo: currentSeo, socialLinks: currentSocial });
   } catch (error: unknown) {
     console.error('Error updating SEO and social settings:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to update SEO and social settings.') }, { status: 500 });

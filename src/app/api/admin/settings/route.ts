@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase, hashPassword, verifyPassword } from '@/lib/db';
+import { fetchAdminUserAsync, updateAdminUserAsync, hashPassword, verifyPassword } from '@/lib/db';
 import { getAdminSession, setAdminSession } from '@/lib/auth';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { isValidEmail, verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
@@ -26,20 +26,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Current password is required to confirm changes.' }, { status: 400 });
     }
 
-    const db = getDatabase();
-    const isCurrentValid = verifyPassword(currentPassword, db.admin.passwordHash, db.admin.salt);
+    const admin = await fetchAdminUserAsync();
+    const isCurrentValid = verifyPassword(currentPassword, admin.passwordHash, admin.salt);
 
     if (!isCurrentValid) {
       console.warn(`[SECURITY WARNING] Failed admin password verification in settings from IP: ${ip}`);
       return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 401 });
     }
 
+    const updates: any = {};
+
     if (newEmail && typeof newEmail === 'string' && newEmail.trim()) {
       const cleanEmail = newEmail.trim().toLowerCase();
       if (!isValidEmail(cleanEmail)) {
         return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
       }
-      db.admin.email = cleanEmail;
+      updates.email = cleanEmail;
     }
 
     if (newPassword && typeof newPassword === 'string' && newPassword.trim()) {
@@ -52,21 +54,22 @@ export async function POST(req: NextRequest) {
 
       // Hash with 100,000 PBKDF2 SHA-512 iterations
       const { hash, salt } = hashPassword(newPassword);
-      db.admin.passwordHash = hash;
-      db.admin.salt = salt;
+      updates.passwordHash = hash;
+      updates.salt = salt;
 
       // Invalidate all previously issued tokens
-      db.admin.tokenVersion = (db.admin.tokenVersion || 1) + 1;
+      updates.tokenVersion = (admin.tokenVersion || 1) + 1;
     }
 
-    saveDatabase(db);
+    await updateAdminUserAsync({ id: admin.id, ...updates });
+    const finalEmail = updates.email || admin.email;
 
     // Issue refreshed session cookie
-    await setAdminSession(db.admin.id, db.admin.email);
+    await setAdminSession(admin.id, finalEmail);
 
     console.log(`[SECURITY AUDIT] Admin credentials updated successfully from IP: ${ip}`);
 
-    return NextResponse.json({ success: true, email: db.admin.email, message: 'Settings updated successfully.' });
+    return NextResponse.json({ success: true, email: finalEmail, message: 'Settings updated successfully.' });
   } catch (error: unknown) {
     console.error('Error updating admin settings:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to update credentials.') }, { status: 500 });

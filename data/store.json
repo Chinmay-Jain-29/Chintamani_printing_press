@@ -430,6 +430,17 @@
   ],
   "reviews": [
     {
+      "id": "rev-1788784969973-804",
+      "customerName": "Rohan Sharma",
+      "location": "Dongaon",
+      "rating": 5,
+      "reviewText": "Excellent service and quick delivery of visiting cards!",
+      "language": "en",
+      "status": "pending",
+      "featured": false,
+      "createdAt": "2026-09-07T12:42:49.973Z"
+    },
+    {
       "id": "rev-1788446794495",
       "customerName": "Chinmay Jain",
       "location": "Dongaon",
@@ -475,6 +486,17 @@
     }
   ],
   "quotes": [
+    {
+      "id": "CP-2026-9494673",
+      "customerName": "Supabase Test Customer",
+      "phone": "9421396905",
+      "service": "Visiting Cards",
+      "requirements": "Testing Supabase migration persistence",
+      "preferredContact": "WhatsApp",
+      "status": "New",
+      "internalNotes": "",
+      "createdAt": "2026-09-07T12:42:39.494Z"
+    },
     {
       "id": "CP-2026-0925009",
       "customerName": "Ganesh Shinde",

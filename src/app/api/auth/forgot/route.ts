@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { fetchAdminUserAsync, updateAdminUserAsync } from '@/lib/db';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { getSafeErrorMessage } from '@/lib/security';
 
@@ -30,15 +30,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email address.' }, { status: 400 });
     }
 
-    const db = getDatabase();
+    const admin = await fetchAdminUserAsync();
 
-    // Constant message regardless of whether email exists to prevent account enumeration
+    // Constant message regardless of whether email matches to prevent account enumeration
     const genericResponse = {
       success: true,
       message: 'If the provided email matches our admin records, a recovery PIN has been generated.',
     };
 
-    if (cleanEmail !== db.admin.email.toLowerCase().trim()) {
+    if (cleanEmail !== admin.email.toLowerCase().trim()) {
       return NextResponse.json(genericResponse);
     }
 
@@ -50,12 +50,11 @@ export async function POST(req: NextRequest) {
     // Store SHA-256 hash of the PIN rather than plaintext
     const resetTokenHash = crypto.createHash('sha256').update(resetPin).digest('hex');
 
-    db.admin.resetTokenHash = resetTokenHash;
-    db.admin.resetExpires = expires;
-    // Clear legacy plaintext token
-    delete db.admin.resetToken;
-
-    saveDatabase(db);
+    await updateAdminUserAsync({
+      id: admin.id,
+      resetTokenHash,
+      resetExpires: expires,
+    });
 
     console.log(`[SECURITY AUDIT] Password recovery PIN generated for admin account from IP ${ip}. (Expires in 15 mins)`);
 

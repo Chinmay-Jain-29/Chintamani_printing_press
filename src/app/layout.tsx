@@ -8,7 +8,7 @@ import { MobileBottomNav } from '@/components/navigation/MobileBottomNav';
 import { FloatingContact } from '@/components/navigation/FloatingContact';
 import { CustomCursor } from '@/components/common/CustomCursor';
 import { ScrollRestorationManager } from '@/components/common/ScrollRestorationManager';
-import { getDatabase } from '@/lib/db';
+import { getDatabaseAsync } from '@/lib/db';
 import { safeJsonLdStringify } from '@/lib/security';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -24,29 +24,42 @@ const notoSansDevanagari = Noto_Sans_Devanagari({
 });
 
 export const viewport: Viewport = {
-  themeColor: '#0b1118',
+  themeColor: '#8B0000',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
 };
 
 export const metadata: Metadata = {
-  title: 'New Chintamani Printing Press | Trusted Printing Since 1999 | Dongaon',
+  metadataBase: new URL('https://newchintamaniprinting.com'),
+  title: {
+    default: 'New Chintamani Printing Press | Dongaon (Estd. 1999)',
+    template: '%s | New Chintamani Printing Press',
+  },
   description:
-    'New Chintamani Printing Press in Dongaon (Mehekar, Buldhana) - 25+ years of trusted offset, digital, and flex printing, wedding invitation cards, visiting cards, bill books, and creative designing.',
+    'Quality printing services trusted since 1999 in Dongaon, Mehekar, Buldhana. Visiting cards, wedding invitations, flex banners, bill books, and graphic designing by Mr. Prakash Devendra Jain.',
   keywords: [
     'Printing Press in Dongaon',
-    'Printing Shop in Dongaon',
+    'Printing Shop Dongaon',
     'Visiting Card Printing Dongaon',
     'Wedding Card Printing Dongaon',
-    'Flex Printing Dongaon',
-    'Printing Press in Mehekar',
-    'Printing Services in Buldhana',
-    'New Chintamani Printing Press',
-    'Prakash Devendra Jain',
+    'Flex Printing Mehekar',
+    'Printing Buldhana',
+    'Chintamani Printing Dongaon',
+    'Prakash Jain Printing',
   ],
-  authors: [{ name: 'Mr. Prakash Devendra Jain' }],
-  metadataBase: new URL('https://newchintamaniprinting.com'),
+  authors: [{ name: 'Mr. Prakash Devendra Jain', url: 'https://newchintamaniprinting.com' }],
+  creator: 'New Chintamani Printing Press',
+  publisher: 'New Chintamani Printing Press',
+  formatDetection: {
+    telephone: true,
+    address: true,
+    email: true,
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
   openGraph: {
     title: 'New Chintamani Printing Press | Dongaon (Estd. 1999)',
     description:
@@ -58,12 +71,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const db = getDatabase();
+  const db = await getDatabaseAsync();
   const business = db.businessInfo;
   const branding = db.branding;
   const social = db.socialLinks;

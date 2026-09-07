@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { fetchTranslationsAsync, saveTranslationsAsync } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { sanitizeText, verifyRequestOrigin, getSafeErrorMessage } from '@/lib/security';
 
@@ -8,8 +8,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await getAdminSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const db = getDatabase();
-  return NextResponse.json({ translations: db.translations });
+  const translations = await fetchTranslationsAsync();
+  return NextResponse.json({ translations });
 }
 
 export async function POST(req: NextRequest) {
@@ -26,10 +26,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid translations payload.' }, { status: 400 });
     }
 
-    const db = getDatabase();
+    const current = await fetchTranslationsAsync();
+    const sanitizedTranslations: Record<string, any> = { ...current };
 
-    // Sanitize translations object
-    const sanitizedTranslations: Record<string, Record<string, string>> = { ...db.translations };
     for (const [key, langMap] of Object.entries(translations)) {
       if (typeof langMap === 'object' && langMap !== null) {
         sanitizedTranslations[key] = sanitizedTranslations[key] || {};
@@ -41,10 +40,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    db.translations = sanitizedTranslations as any;
-    saveDatabase(db);
-
-    return NextResponse.json({ success: true, translations: db.translations });
+    await saveTranslationsAsync(sanitizedTranslations);
+    return NextResponse.json({ success: true, translations: sanitizedTranslations });
   } catch (error: unknown) {
     console.error('Error updating translations:', error);
     return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to update translations.') }, { status: 500 });
