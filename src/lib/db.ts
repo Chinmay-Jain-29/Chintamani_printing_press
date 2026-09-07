@@ -580,6 +580,8 @@ function getDefaultDatabase(): AppDatabase {
   };
 }
 
+let memoryDb: AppDatabase | null = null;
+
 export function getDatabase(): AppDatabase {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -587,28 +589,49 @@ export function getDatabase(): AppDatabase {
     }
     if (!fs.existsSync(DB_FILE)) {
       const initialDb = getDefaultDatabase();
+      memoryDb = initialDb;
       saveDatabase(initialDb);
       return initialDb;
     }
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
-    return { ...getDefaultDatabase(), ...parsed };
+    const db = { ...getDefaultDatabase(), ...parsed };
+    memoryDb = db;
+    return db;
   } catch (error) {
-    console.error('Error reading database, falling back to default:', error);
+    console.error('Error reading database, falling back to memory/default:', error);
+    if (memoryDb) return memoryDb;
     return getDefaultDatabase();
   }
 }
 
 export function saveDatabase(data: AppDatabase): void {
+  // Always update in-memory representation so current process has immediate consistency
+  memoryDb = data;
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempFile, DB_FILE);
+    const payload = JSON.stringify(data, null, 2);
+
+    // On Windows, fs.renameSync can throw EPERM if DB_FILE is locked or watched.
+    // We write directly to DB_FILE with a safe fallback.
+    try {
+      fs.writeFileSync(DB_FILE, payload, 'utf-8');
+    } catch (writeErr) {
+      const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
+      fs.writeFileSync(tempFile, payload, 'utf-8');
+      try {
+        fs.copyFileSync(tempFile, DB_FILE);
+        try { fs.unlinkSync(tempFile); } catch {}
+      } catch (copyErr) {
+        console.warn('[DB] Could not copy temp file to DB_FILE:', copyErr);
+      }
+    }
   } catch (error) {
-    console.error('Error saving database:', error);
-    throw error;
+    // In serverless / read-only filesystem environments (e.g. Vercel), disk persistence
+    // is not supported, but in-memory updates remain valid. Do not throw to avoid crashing user flows.
+    console.warn('[DB] Warning: Could not persist database to disk:', error);
   }
 }

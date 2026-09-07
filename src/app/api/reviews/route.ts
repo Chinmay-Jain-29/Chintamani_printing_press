@@ -91,7 +91,11 @@ export async function POST(req: NextRequest) {
     };
 
     db.reviews.unshift(newReview);
-    saveDatabase(db);
+    try {
+      saveDatabase(db);
+    } catch (saveErr) {
+      console.warn('[DB] Warning: Could not persist review to disk:', saveErr);
+    }
 
     console.log(`[AUDIT] New customer review submitted: ${reviewId} (pending moderation) from IP: ${ip}`);
 

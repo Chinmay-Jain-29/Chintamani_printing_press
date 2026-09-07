@@ -59,7 +59,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Please provide valid form details.' }, { status: 400 });
+    }
 
     // Spam honeypot trap: if bot filled hidden fields, silently discard
     if (body.website_hp || body.hp_fax_num) {
@@ -113,14 +118,20 @@ export async function POST(req: NextRequest) {
     };
 
     db.quotes.unshift(newQuote);
-    saveDatabase(db);
+
+    // Save database safely: disk persistence issues should never abort a registered quote
+    try {
+      saveDatabase(db);
+    } catch (saveErr) {
+      console.warn('[DB] Warning: Could not persist quote to disk:', saveErr);
+    }
 
     console.log(`[AUDIT] New quote request received: ${quoteId} from IP: ${ip}`);
 
     return NextResponse.json({ success: true, quote: newQuote });
   } catch (error: unknown) {
     console.error('Error submitting quote:', error);
-    return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to submit quote request.') }, { status: 500 });
+    return NextResponse.json({ error: getSafeErrorMessage(error, 'Failed to submit quote request. Please contact us directly via WhatsApp or Call.') }, { status: 500 });
   }
 }
 

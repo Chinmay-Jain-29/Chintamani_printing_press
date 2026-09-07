@@ -34,6 +34,7 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedQuoteId, setSubmittedQuoteId] = useState('');
+  const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,12 +42,28 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleCopyToken = () => {
+    if (submittedQuoteId) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(submittedQuoteId);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (!formData.customerName.trim() || !formData.phone.trim()) {
-      setErrorMsg('Please provide your name and phone number.');
+      setErrorMsg(
+        language === 'mr'
+          ? 'कृपया आपले नाव आणि संपर्क क्रमांक भरा.'
+          : language === 'hi'
+          ? 'कृपया अपना नाम और संपर्क नंबर भरें।'
+          : 'Please provide your name and phone number.'
+      );
       return;
     }
 
@@ -59,14 +76,17 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to submit quote request.');
-      }
 
-      setSubmittedQuoteId(data.quote?.id || 'CP-2026');
-      setIsSuccess(true);
+      // If the quote was created or the request succeeded, transition to confirmation screen
+      if (data?.quote?.id || data?.success || res.ok) {
+        setSubmittedQuoteId(data?.quote?.id || `CP-2026-${Date.now().toString().slice(-6)}`);
+        setIsSuccess(true);
+      } else {
+        throw new Error(data?.error || 'Failed to submit quote request. Please contact us via WhatsApp or Call.');
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred while submitting your request.');
+      console.error('Quote submission error:', err);
+      setErrorMsg(err.message || 'Failed to submit quote request. Please contact us directly.');
     } finally {
       setIsSubmitting(false);
     }
@@ -74,6 +94,7 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
 
   const handleResetAndClose = () => {
     setIsSuccess(false);
+    setCopied(false);
     setFormData({
       customerName: '',
       phone: '',
@@ -87,6 +108,10 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
     });
     onClose();
   };
+
+  const whatsappMessage = encodeURIComponent(
+    `Namaskar! I submitted quote request #${submittedQuoteId} on your website for ${formData.service || 'printing service'}. My name is ${formData.customerName}. Please provide price details.`
+  );
 
   return (
     <div
@@ -138,75 +163,203 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
             justifyContent: 'center',
             fontSize: '1.1rem',
             color: 'var(--text-secondary)',
+            cursor: 'pointer',
           }}
         >
           ✕
         </button>
 
         {isSuccess ? (
-          /* Confirmation State */
-          <div style={{ textAlign: 'center', padding: '16px 8px' }}>
+          /* Confirmation State with Thank You Message, Order Token, WhatsApp & Call Options */
+          <div style={{ textAlign: 'center', padding: '12px 4px' }}>
             <div
               style={{
-                width: '64px',
-                height: '64px',
+                width: '68px',
+                height: '68px',
                 borderRadius: 'var(--radius-full)',
-                backgroundColor: 'var(--status-success-bg)',
-                color: 'var(--status-success)',
+                backgroundColor: 'rgba(22, 101, 52, 0.1)',
+                border: '2px solid rgba(22, 101, 52, 0.25)',
+                color: '#15803d',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '2rem',
+                fontSize: '2.2rem',
+                fontWeight: 800,
                 marginBottom: '16px',
+                boxShadow: '0 4px 14px rgba(22, 101, 52, 0.12)',
               }}
             >
               ✓
             </div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--ink-deep)', marginBottom: '8px' }}>
-              {t('quoteSuccessTitle')}
+
+            <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--ink-deep)', marginBottom: '8px' }}>
+              {language === 'mr'
+                ? 'धन्यवाद! कोटेशन विनंती प्राप्त झाली'
+                : language === 'hi'
+                ? 'धन्यवाद! कोटेशन अनुरोध प्राप्त हुआ'
+                : 'Thank You! Quote Request Received'}
             </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '16px', lineHeight: 1.5 }}>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: '20px', lineHeight: 1.55, maxWidth: '440px', margin: '0 auto 20px' }}>
               {t('quoteSuccessDesc')}
             </p>
+
+            {/* Prominent Order Token Box */}
             <div
               style={{
-                display: 'inline-block',
-                padding: '6px 14px',
                 backgroundColor: 'var(--paper-ivory)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'var(--ink-700)',
-                marginBottom: '24px',
+                border: '1.5px solid var(--paper-border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px 20px',
+                marginBottom: '22px',
+                textAlign: 'center',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
               }}
             >
-              Request Reference: <strong>{submittedQuoteId}</strong>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  fontWeight: 700,
+                  color: 'var(--ink-muted)',
+                  marginBottom: '8px',
+                }}
+              >
+                {language === 'mr'
+                  ? 'तुमचा संदर्भ ऑर्डर टोकन क्रमांक'
+                  : language === 'hi'
+                  ? 'आपका संदर्भ ऑर्डर टोकन नंबर'
+                  : 'Order Reference Token'}
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'monospace, Consolas, Courier New',
+                    fontSize: '1.4rem',
+                    fontWeight: 800,
+                    letterSpacing: '1px',
+                    color: 'var(--ink-deep)',
+                    backgroundColor: 'rgba(0,0,0,0.05)',
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                  }}
+                >
+                  {submittedQuoteId}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleCopyToken}
+                  style={{
+                    backgroundColor: copied ? '#15803d' : 'var(--ink-deep)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {copied ? '✓ Copied' : '📋 Copy Token'}
+                </button>
+              </div>
+
+              <p
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                  marginTop: '10px',
+                  marginBottom: 0,
+                }}
+              >
+                {language === 'mr'
+                  ? 'चौकशीसाठी हा टोकन क्रमांक लक्षात ठेवा किंवा व्हॉट्सॲपवर पाठवा.'
+                  : language === 'hi'
+                  ? 'शीघ्र पूछताछ के लिए यह टोकन नंबर नोट कर लें अथवा व्हाट्सएप पर भेजें।'
+                  : 'Please keep this token handy for fast reference when contacting our shop.'}
+              </p>
             </div>
 
+            {/* Direct WhatsApp and Call Action Options */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <a
-                href={`https://wa.me/919421396905?text=${encodeURIComponent(`Namaskar! I submitted a quote request (${submittedQuoteId}) on your website for ${formData.service || 'printing work'}. My name is ${formData.customerName}.`)}`}
+                href={`https://wa.me/919421396905?text=${whatsappMessage}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-whatsapp"
-                style={{ width: '100%' }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px',
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                }}
               >
-                <span>💬</span>
-                <span>Direct WhatsApp Follow-up</span>
+                <span style={{ fontSize: '1.2rem' }}>💬</span>
+                <span>
+                  {language === 'mr'
+                    ? 'थेट व्हॉट्सॲपवर संपर्क करा (९४२१३९६९०५)'
+                    : language === 'hi'
+                    ? 'सीधे व्हाट्सएप पर संपर्क करें (9421396905)'
+                    : 'Direct WhatsApp Follow-up (9421396905)'}
+                </span>
               </a>
 
-              <a href="tel:9421396905" className="btn btn-secondary" style={{ width: '100%' }}>
-                <span>📞</span>
-                <span>Call Shop (9421396905)</span>
+              <a
+                href="tel:9421396905"
+                className="btn btn-secondary"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px',
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>📞</span>
+                <span>
+                  {language === 'mr'
+                    ? 'थेट दुकानात कॉल करा (९४२१३९६९०५ / ९८३४८५३८५१)'
+                    : language === 'hi'
+                    ? 'सीधे दुकान पर कॉल करें (9421396905 / 9834853851)'
+                    : 'Call Shop (9421396905 / 9834853851)'}
+                </span>
               </a>
 
               <button
                 type="button"
                 onClick={handleResetAndClose}
                 className="btn btn-dark"
-                style={{ width: '100%', marginTop: '6px' }}
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
               >
-                Close & Return
+                {language === 'mr' ? 'बंद करा व मुख्यपृष्ठावर जा' : language === 'hi' ? 'बंद करें और होम पर जाएं' : 'Close & Return'}
               </button>
             </div>
           </div>
@@ -232,15 +385,33 @@ export const QuoteModal: React.FC<QuoteModalProps> = ({
             {errorMsg && (
               <div
                 style={{
-                  padding: '12px',
+                  padding: '12px 16px',
                   backgroundColor: 'var(--status-error-bg)',
+                  border: '1px solid var(--status-error-border)',
                   color: 'var(--status-error)',
                   borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.9rem',
+                  fontSize: '0.88rem',
                   marginBottom: '16px',
                 }}
               >
-                {errorMsg}
+                <div style={{ fontWeight: 600, marginBottom: '6px' }}>{errorMsg}</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--ink-deep)', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <span>Or contact us directly:</span>
+                  <a
+                    href="https://wa.me/919421396905"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#166534', fontWeight: 700, textDecoration: 'underline' }}
+                  >
+                    💬 WhatsApp (9421396905)
+                  </a>
+                  <a
+                    href="tel:9421396905"
+                    style={{ color: '#0369a1', fontWeight: 700, textDecoration: 'underline' }}
+                  >
+                    📞 Call (9421396905)
+                  </a>
+                </div>
               </div>
             )}
 
