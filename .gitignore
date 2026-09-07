@@ -13,8 +13,8 @@
 /dist
 
 # Operational database and user uploads
-/data/store.json
 /data/*.tmp*
+!/data/store.json
 !/data/.gitkeep
 /public/uploads/*
 !/public/uploads/.gitkeep

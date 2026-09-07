@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { getDatabase, saveDatabase, syncDatabaseFromCloud } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { QuoteRequest } from '@/lib/schema';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    await syncDatabaseFromCloud();
     const db = getDatabase();
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get('status');
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Please enter a valid WhatsApp number.' }, { status: 400 });
     }
 
+    await syncDatabaseFromCloud();
     const db = getDatabase();
 
     // Auto-generate reference ID: CP-2026-XXXX

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase, saveDatabase } from '@/lib/db';
+import { getDatabase, saveDatabase, syncDatabaseFromCloud } from '@/lib/db';
 import { getAdminSession } from '@/lib/auth';
 import { Review, ReviewStatus } from '@/lib/schema';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 // GET: Fetch reviews
 export async function GET(req: NextRequest) {
   try {
+    await syncDatabaseFromCloud();
     const session = await getAdminSession();
     const db = getDatabase();
 

@@ -4,7 +4,9 @@ import crypto from 'crypto';
 import { AppDatabase, BusinessInfo, Branding, HomepageConfig, Service, PortfolioItem, Review, QuoteRequest, SocialLinks, SeoSettings, AdminUser } from './schema';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'store.json');
+const BUNDLED_DB_FILE = path.join(DATA_DIR, 'store.json');
+const IS_SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const ACTIVE_DB_FILE = IS_SERVERLESS ? path.join('/tmp', 'store.json') : BUNDLED_DB_FILE;
 
 // Security helper: hash password with salt (100,000 iterations of PBKDF2 SHA-512)
 export function hashPassword(password: string, salt?: string, iterations = 100000): { hash: string; salt: string } {
@@ -583,21 +585,43 @@ function getDefaultDatabase(): AppDatabase {
 let memoryDb: AppDatabase | null = null;
 
 export function getDatabase(): AppDatabase {
+  if (memoryDb) {
+    return memoryDb;
+  }
+
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    // In serverless hosting, ensure /tmp/store.json is initialized from bundled store.json if not present
+    if (IS_SERVERLESS && !fs.existsSync(ACTIVE_DB_FILE)) {
+      if (fs.existsSync(BUNDLED_DB_FILE)) {
+        try {
+          const bundledContent = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+          fs.writeFileSync(ACTIVE_DB_FILE, bundledContent, 'utf-8');
+        } catch (copyErr) {
+          console.warn('[DB] Could not initialize /tmp/store.json from bundled file:', copyErr);
+        }
+      }
     }
-    if (!fs.existsSync(DB_FILE)) {
-      const initialDb = getDefaultDatabase();
-      memoryDb = initialDb;
-      saveDatabase(initialDb);
-      return initialDb;
+
+    if (fs.existsSync(ACTIVE_DB_FILE)) {
+      const raw = fs.readFileSync(ACTIVE_DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const db = { ...getDefaultDatabase(), ...parsed };
+      memoryDb = db;
+      return db;
     }
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const db = { ...getDefaultDatabase(), ...parsed };
-    memoryDb = db;
-    return db;
+
+    if (fs.existsSync(BUNDLED_DB_FILE)) {
+      const raw = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const db = { ...getDefaultDatabase(), ...parsed };
+      memoryDb = db;
+      return db;
+    }
+
+    const initialDb = getDefaultDatabase();
+    memoryDb = initialDb;
+    saveDatabase(initialDb);
+    return initialDb;
   } catch (error) {
     console.error('Error reading database, falling back to memory/default:', error);
     if (memoryDb) return memoryDb;
@@ -610,28 +634,82 @@ export function saveDatabase(data: AppDatabase): void {
   memoryDb = data;
 
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
     const payload = JSON.stringify(data, null, 2);
 
-    // On Windows, fs.renameSync can throw EPERM if DB_FILE is locked or watched.
-    // We write directly to DB_FILE with a safe fallback.
-    try {
-      fs.writeFileSync(DB_FILE, payload, 'utf-8');
-    } catch (writeErr) {
-      const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
-      fs.writeFileSync(tempFile, payload, 'utf-8');
+    if (IS_SERVERLESS) {
+      // In serverless, write to /tmp which is the only writable directory
       try {
-        fs.copyFileSync(tempFile, DB_FILE);
-        try { fs.unlinkSync(tempFile); } catch {}
-      } catch (copyErr) {
-        console.warn('[DB] Could not copy temp file to DB_FILE:', copyErr);
+        fs.writeFileSync(ACTIVE_DB_FILE, payload, 'utf-8');
+      } catch (err) {
+        console.warn('[DB] Warning: Could not write to /tmp/store.json:', err);
+      }
+    } else {
+      // Local development or persistent host: write to data/store.json
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      try {
+        fs.writeFileSync(BUNDLED_DB_FILE, payload, 'utf-8');
+      } catch (writeErr) {
+        const tempFile = `${BUNDLED_DB_FILE}.tmp.${Date.now()}`;
+        fs.writeFileSync(tempFile, payload, 'utf-8');
+        try {
+          fs.copyFileSync(tempFile, BUNDLED_DB_FILE);
+          try { fs.unlinkSync(tempFile); } catch {}
+        } catch (copyErr) {
+          console.warn('[DB] Could not copy temp file to DB_FILE:', copyErr);
+        }
       }
     }
+
+    // Optional Cloud KV (Vercel KV / Upstash Redis) persistence via REST API
+    // Zero dependencies: works via native fetch when KV environment variables are present
+    const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+    const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (kvUrl && kvToken) {
+      fetch(`${kvUrl}/set/chintamani_store_db`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${kvToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }).catch((kvErr) => console.warn('[DB] KV sync warning:', kvErr));
+    }
   } catch (error) {
-    // In serverless / read-only filesystem environments (e.g. Vercel), disk persistence
-    // is not supported, but in-memory updates remain valid. Do not throw to avoid crashing user flows.
     console.warn('[DB] Warning: Could not persist database to disk:', error);
   }
+}
+
+/**
+ * Asynchronously sync database from cloud KV (Vercel KV / Upstash Redis) if configured.
+ */
+export async function syncDatabaseFromCloud(): Promise<AppDatabase | null> {
+  const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!kvUrl || !kvToken) return null;
+
+  try {
+    const res = await fetch(`${kvUrl}/get/chintamani_store_db`, {
+      headers: { Authorization: `Bearer ${kvToken}` },
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.result) {
+        const rawJson = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+        const merged = { ...getDefaultDatabase(), ...rawJson };
+        memoryDb = merged;
+        if (IS_SERVERLESS) {
+          try {
+            fs.writeFileSync(ACTIVE_DB_FILE, JSON.stringify(merged, null, 2), 'utf-8');
+          } catch {}
+        }
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('[DB] Cloud KV sync warning:', err);
+  }
+  return null;
 }

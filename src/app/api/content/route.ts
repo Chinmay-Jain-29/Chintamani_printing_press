@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db';
+import { getDatabase, syncDatabaseFromCloud } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    await syncDatabaseFromCloud();
     const db = getDatabase();
     // Return database without sensitive admin password hashes/salts
     const safeData = {

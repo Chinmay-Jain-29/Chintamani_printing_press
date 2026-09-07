@@ -68,15 +68,20 @@ Target: Check both 'Production' and 'Preview'
 
 ## 4. Production Hosting Architecture & Storage Notes
 
-### Vercel Serverless Behavior
-- **Public Website & Showcase:** Fully supported. All pages, multilingual toggles, GSAP animations, services, and portfolio galleries load with optimal speed and CDN caching.
-- **Serverless File Storage Consideration:**
-  - Vercel functions execute in a read-only serverless environment.
-  - While initial seed data from `src/lib/db.ts` is pre-baked and will display cleanly, runtime writes (`data/store.json` and `public/uploads/`) cannot persist permanently across serverless function re-deployments.
-  - If you intend to actively modify content in the Admin CMS or upload new pictures directly on Vercel, consider connecting an external database (such as Supabase, MongoDB, or Vercel KV) and cloud media storage (Vercel Blob or Cloudinary).
+### Vercel Serverless Architecture
+- **Bundled Baseline Database:** `data/store.json` is tracked in the repository and automatically deployed with your application. All 9 quotes, services, reviews, and admin settings are immediately available on deployment.
+- **Serverless Writable Layer (`/tmp`):**
+  - In Vercel serverless environments, Next.js uses `/tmp/store.json` as its writable storage layer.
+  - Runtime quote requests and reviews write directly to `/tmp`, ensuring they persist during active sessions and refreshes without triggering filesystem lock errors.
+- **100% Permanent Cloud Persistence (Optional, Free 1-Click Vercel KV / Upstash):**
+  - Because serverless lambdas can recycle after periods of inactivity, the codebase includes built-in, zero-dependency cloud persistence via standard REST API.
+  - To enable permanent cross-container cloud persistence:
+    1. In your Vercel Dashboard, navigate to your project and click **Storage** → **Create Database** → **KV** (or connect [Upstash Redis](https://upstash.com)).
+    2. Click **Connect to Project**. Vercel will automatically provide `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+    3. No code changes are required: the app automatically detects these variables and synchronizes quote requests and reviews permanently to your cloud KV store.
 
 ### Alternative: Persistent Node.js Host (Render / Railway / VPS)
-If you wish to retain the project's zero-dependency local JSON file store and local image uploads without changing any code:
+If you deploy to a persistent container host:
 1. Deploy to any persistent container/host (e.g. **Railway**, **Render Web Service**, or a **VPS**).
 2. Start command: `npm run build && npm run start`.
 3. Set `ADMIN_SESSION_SECRET` in the host's environment settings.
@@ -90,8 +95,8 @@ Before triggering a production deployment, confirm:
 
 - [x] **Repository Initialized:** Pushed to `https://github.com/Chinmay-Jain-29/Chintamani_printing_press.git`.
 - [x] **Secrets Excluded:** `.env.local` is listed in `.gitignore` and has never been committed.
-- [x] **Operational Data Excluded:** `data/store.json` and `public/uploads/*` are excluded via `.gitignore`.
-- [x] **Directory Placeholders:** `data/.gitkeep` and `public/uploads/.gitkeep` are tracked.
+- [x] **Operational Database Included:** `data/store.json` is tracked to seed the initial 9 quotes, services, and content.
+- [x] **Uploads Excluded:** `public/uploads/*` is excluded via `.gitignore` with `.gitkeep` tracked.
 - [x] **Zero Build Errors:** Verified with `npm run build` (26/26 routes compile cleanly).
 - [x] **Zero Lint Errors:** Verified with `npm run lint`.
 - [x] **Admin Security:** Admin login fields initialize empty with no hardcoded credentials or developer hints.
